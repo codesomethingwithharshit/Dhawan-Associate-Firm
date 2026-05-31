@@ -192,6 +192,14 @@ nav.scrolled {
     color: #FF5E00;
 }
 
+.nav-links .nav-icon {
+    vertical-align: middle;
+    margin-right: 5px;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
 .nav-links a::before {
     content: '';
     position: absolute;
