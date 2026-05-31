@@ -35,20 +35,35 @@ CTZ909S1lvSjMbMkKQbQdmQ=
 
 const COLUMNS = ['Timestamp', 'from_name', 'from_email', 'phone', 'service', 'location', 'purpose', 'message', 'form'];
 
+function b64url(s) {
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function pemToDer(pem) {
+    const b64 = pem.replace(/-----BEGIN [\w\s]+-----/, '').replace(/-----END [\w\s]+-----/, '').replace(/\s/g, '');
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+}
+
 async function getAccessToken() {
-    const header = { alg: 'RS256', typ: 'JWT' };
     const now = Math.floor(Date.now() / 1000);
-    const claim = {
+    const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+    const claim = b64url(JSON.stringify({
         iss: SHEET_CONFIG.clientEmail,
         scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
         aud: 'https://oauth2.googleapis.com/token',
         exp: now + 3600,
         iat: now
-    };
-    const privateKey = await jose.importPKCS8(SHEET_CONFIG.privateKey, 'RS256');
-    const jwt = await new jose.SignJWT(claim)
-        .setProtectedHeader(header)
-        .sign(privateKey);
+    }));
+    const sigInput = header + '.' + claim;
+
+    const key = await crypto.subtle.importKey('pkcs8', pemToDer(SHEET_CONFIG.privateKey),
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+    const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(sigInput));
+    const jwt = sigInput + '.' + b64url(String.fromCharCode(...new Uint8Array(sig)));
+
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
